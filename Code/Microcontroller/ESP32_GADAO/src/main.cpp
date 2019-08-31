@@ -17,6 +17,7 @@
 // This Example is a Demo of Realtime Capabilities of ESP-DASH with Access Point.
 // Open Dashboard after Uploading and UI will auto update as a Card's Value changes
 
+#define WIFI_MODO STA
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -27,27 +28,39 @@
 AsyncWebServer server(80);
 
 // Your ESP32 Access Point Name and Password
-const char* ssid = "TT_GADAO"; // Your WiFi SSID
-const char* password = "test"; // Your WiFi Password / Empty Password = Open AP
+const char *ssid = "TT-Gadao";
+const char *password = "guerreiro";
 
+int indicator = 2;
 
-void setup() {
-    Serial.begin(115200);
-    WiFi.mode(WIFI_AP);
+bool LED = LOW;
+
+void buttonClicked(const char *id)
+{
+    Serial.println("Button Clicked - " + String(id));
+    LED = !LED;
+    digitalWrite(indicator, LED);
+}
+
+void setup()
+{
+    Serial.begin(9600);
+    pinMode(indicator, OUTPUT);
+     WiFi.mode(WIFI_AP);
     WiFi.softAP(ssid, password);
     Serial.print("IP Address: ");
     Serial.println(WiFi.softAPIP());
-    
-    ESPDash.init(server);   // Initiate ESPDash and attach your Async webserver instance
-    // Add Respective Cards
-    ESPDash.addNumberCard("num1", "Number Card", 264);
-    ESPDash.addTemperatureCard("temp1", "Temperature Card", 0, 20);
-    ESPDash.addHumidityCard("hum1", "Humidity Card", 98);
-    
+
+    ESPDash.init(server); // Initiate ESPDash and attach your Async webserver instance
+    // Add Respective Cards and attach Button Click Function
+    ESPDash.addButtonCard("btn1", "Blink Button");
+    ESPDash.attachButtonClick(buttonClicked);
+
     server.begin();
 }
 
-void loop() {
+void loop()
+{
     ESPDash.updateNumberCard("num1", random(0, 5000));
     ESPDash.updateTemperatureCard("temp1", random(0, 50));
     ESPDash.updateHumidityCard("hum1", random(0, 100));
