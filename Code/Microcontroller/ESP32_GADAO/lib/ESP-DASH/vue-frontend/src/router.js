@@ -4,7 +4,7 @@ import Router from 'vue-router'
 Vue.use(Router);
 
 import Home from './views/Home.vue';
-import About from './views/About.vue';
+//import About from './views/About.vue';
 import Stats from './views/Stats.vue';
 
 

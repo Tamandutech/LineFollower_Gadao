@@ -1,8 +1,5 @@
 <template>
 <div class="section">
-    <!-- Made by Ayush Sharma -->
-    <!-- ESP-DASH V2 | 25-01-2019 -->
-    <!-- GitHub Profile: https://github.com/ayushsharma82 -->
     <navbar :connected="ws.connected"></navbar>
     <transition name="fade" mode="out-in">
         <router-view :cards="cards" :stats="stats" @reboot="rebootMicrocontroller"/>
