@@ -12,8 +12,8 @@ AsyncWebServer server(80);
 const char *ssid = "TT-Gadao";
 const char *password = "guerreiro";
 #elif defined WIFI_MODE_CONNECT
-const char *ssid = "VIVOFIBRA-5C6C";
-const char *password = "c662005c6c";
+const char *ssid = "VIVOFIBRA-737C";
+const char *password = "941138872";
 #endif
 
 int indicator = 2;
