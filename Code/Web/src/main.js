@@ -13,7 +13,7 @@ Vue.config.productionTip = false
 
 router.beforeEach((to, from, next) => {
   let title = to.name;
-  document.title = title+" Page - Tamandutech";
+  document.title = title+" - Tamandutech";
   next();
 });
 
