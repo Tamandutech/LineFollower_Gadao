@@ -6,7 +6,7 @@
 #include <ESPAsyncWebServer.h>
 #include <ESPDash.h>
 #include <WiFi.h>
-#include <AsyncElegantOTA.h>
+#include <AsyncOTA.h>
 
 AsyncWebServer server(80);
 
@@ -88,16 +88,17 @@ void setup()
   ESPDash.addButtonCard("btn1", "Botão LED");
   ESPDash.attachButtonClick(buttonClicked);
 
-  ESPDash.addSliderCard("slider1", "Slider PID", 1);
+  ESPDash.addSliderCard("slider1", "Slider PID", 2);
   ESPDash.attachSliderChanged(sliderAlterado);
 
   //OTA
-  AsyncElegantOTA.begin(&server);    // Start ElegantOTA
+  AsyncOTA.begin(&server);    // Inicia o servidor de OTA
 
   server.begin();
 }
 
 void loop()
 {
-  AsyncElegantOTA.loop();
+  // loop do OTA
+  AsyncOTA.loop();
 }

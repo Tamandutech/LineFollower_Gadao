@@ -25,11 +25,11 @@ let html = `
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
-    <title>ESP-DASH</title>
+    <title>Tamandutech</title>
   </head>
   <body>
     <noscript>
-      <strong>We're sorry but ESP-DASH doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
+      <strong>Para que o dashboard funcione o suporte a JavaScript deve ser habilitado!</strong>
     </noscript>
     <div id="app"></div>
     <script>${js}</script>
