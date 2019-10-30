@@ -1,4 +1,4 @@
-#define WIFI_MODE_CONNECT
+#define WIFI_MODE_SERVE
 
 #include <Arduino.h>
 #include <Hash.h>

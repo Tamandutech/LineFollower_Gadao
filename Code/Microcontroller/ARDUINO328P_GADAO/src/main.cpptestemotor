@@ -1,0 +1,21 @@
+#include <Arduino.h>
+#include <Atributos.h>
+
+void setup() {
+  pinMode(RIGHT_MOTOR, OUTPUT);
+  pinMode(RIGHT_MOTOR_PWM, OUTPUT);
+  pinMode(LEFT_MOTOR, OUTPUT);
+  pinMode(LEFT_MOTOR_PWM, OUTPUT);
+
+  digitalWrite(RIGHT_MOTOR, LOW);
+  digitalWrite(LEFT_MOTOR, LOW);
+} 
+
+void loop() {
+  delay(50);
+  analogWrite(RIGHT_MOTOR_PWM, 100);
+  analogWrite(LEFT_MOTOR_PWM, 100);
+  delay(50);
+  analogWrite(RIGHT_MOTOR_PWM, 0);
+  analogWrite(LEFT_MOTOR_PWM, 0);
+}
