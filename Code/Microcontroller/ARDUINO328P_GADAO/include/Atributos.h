@@ -1,22 +1,29 @@
 // ativar ou desativar o debug
-#define DEBUG_ARRAY             0
-#define DEBUG_ARRAY_CALIBRAR    0
-#define DEBUG_LTRAIS            0
-#define DEBUG_ENCODER           0
+#define DEBUG_ARRAY 0
+#define DEBUG_ARRAY_CALIBRAR 0
+#define DEBUG_LTRAIS 0
+#define DEBUG_ENCODER 0
+
+// verif curva
+// ms
+#define TIME_CONST 500
+// posicao
+#define THRESHOLD 300
 
 // constantes para o PID
-#define KP 0.05 // kp bom 0.04
-#define KD 0.5    // kd bom 0.4
 #define KI 0.0
 
-// velocidade máxima
-// vel boa 200
-#define MAX_SPEED 200
+// LINHA
 #define MAX_SPEED_LINE 200
-// velocidade de base
-// vel boa 100
-#define BASE_SPEED 100
 #define BASE_SPEED_LINE 200
+#define KP_LINE 0.09
+#define KD_LINE 0.9
+
+// CURVA
+#define MAX_SPEED 200
+#define BASE_SPEED 100
+#define KP 0.05 // kp bom 0.04
+#define KD 0.5  // kd bom 0.4
 
 // numero de sensores, tempo de espera apos calibragem
 #define NUM_SENSORS 6

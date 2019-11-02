@@ -18,6 +18,12 @@ unsigned int sensorEsqCount = 0;
 int lastError = 0;
 int iPID = 0;
 
+float atualKP = KP;
+float atualKD = KD;
+
+unsigned long lastTime = 0;
+unsigned long actualTime = 0;
+
 // variaveis para o controle de velocidade
 int rightMotorSpeed = 0;
 int leftMotorSpeed = 0;
@@ -47,6 +53,7 @@ void velocidadeCalc();
 void velociadeCond();
 void velociadeControl();
 void stopCondition();
+void verifCurva();
 
 void setup() {
   array.setTypeAnalog();
@@ -63,10 +70,12 @@ void loop() {
   sensorArray();
   sensorLaterais();
 
+  verifCurva();
+
   velocidadeCalc();
   velociadeCond();
   velociadeControl();
-  
+
   stopCondition();
 }
 
@@ -119,6 +128,25 @@ void sensorArray() {
 #endif
 }
 
+void verifCurva() {
+  actualTime = millis();
+  int actualThreshold = (position - 2500);
+  actualThreshold = actualThreshold > 0 ? actualThreshold : -actualThreshold;
+
+  if (actualThreshold < THRESHOLD) {
+    if ((actualTime - lastTime) > TIME_CONST) {
+      statusCurva = false;
+      lastTime = actualTime;
+      Serial.println("linha");
+    }
+  } else {
+    statusCurva = true;
+    Serial.println("curva");
+  }
+
+  // Verificar lógica do status curva
+}
+
 void sensorLaterais() {
   sensorDir = analogRead(QRE_RIGHT);
   sensorEsq = analogRead(QRE_LEFT);
@@ -155,9 +183,9 @@ void sensorLaterais() {
 
 int PID() {
   int error = 2500 - position;
-  int p = error * KP;
+  int p = error * atualKP;
   iPID = (iPID + error) * KI;
-  int d = (error - lastError) * KD;
+  int d = (error - lastError) * atualKD;
   lastError = error;
   return (p + iPID + d);
 }
@@ -173,8 +201,17 @@ void pinConfiguration() {
 }
 
 void velociadeCond() {
-  //veloMax = (sensorEsqCount%2) > 0 ? MAX_SPEED : MAX_SPEED_LINE;
-  //veloBase = (sensorEsqCount%2) > 0 ? BASE_SPEED : BASE_SPEED_LINE;
+  if (statusCurva) {
+    veloBase = BASE_SPEED_LINE;
+    veloMax = MAX_SPEED_LINE;
+    atualKD = KD_LINE;
+    atualKP = KP_LINE;
+  } else {
+    veloBase = BASE_SPEED;
+    veloMax = MAX_SPEED;
+    atualKD = KD;
+    atualKP = KP;
+  }
 
   // Impede o motor de ir alem da velocidade maxima
   if (rightMotorSpeed > veloMax)
@@ -192,8 +229,8 @@ void velociadeCond() {
 void velocidadeCalc() {
   rightMotorSpeed = veloBase + PID();
   leftMotorSpeed = veloBase - PID();
-  //Serial.print("PID: ");
-  //Serial.println(PIDcalc);
+  // Serial.print("PID: ");
+  // Serial.println(PIDcalc);
 }
 
 void velociadeControl() {
@@ -202,10 +239,10 @@ void velociadeControl() {
   digitalWrite(LEFT_MOTOR, LOW);
   analogWrite(LEFT_MOTOR_PWM, leftMotorSpeed);
 
- /*  Serial.print(leftMotorSpeed);
-  Serial.print('\t');
-  Serial.print(rightMotorSpeed);
-  Serial.println('\t'); */
+  /*  Serial.print(leftMotorSpeed);
+   Serial.print('\t');
+   Serial.print(rightMotorSpeed);
+   Serial.println('\t'); */
 }
 
 void stopCondition() {
