@@ -15,7 +15,7 @@ void loop() {
   delay(50);
   analogWrite(RIGHT_MOTOR_PWM, 100);
   analogWrite(LEFT_MOTOR_PWM, 100);
-  delay(50);
+  /* delay(50);
   analogWrite(RIGHT_MOTOR_PWM, 0);
-  analogWrite(LEFT_MOTOR_PWM, 0);
+  analogWrite(LEFT_MOTOR_PWM, 0); */
 }

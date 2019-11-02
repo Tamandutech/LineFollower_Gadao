@@ -22,6 +22,12 @@ int iPID = 0;
 int rightMotorSpeed = 0;
 int leftMotorSpeed = 0;
 
+// variaveis de velocidade do robo
+int veloBase = BASE_SPEED;
+int veloMax = MAX_SPEED;
+
+boolean statusCurva = false;
+
 // variaveis para o sensor da esquerda
 boolean sensorEsqLinha = true;
 
@@ -69,7 +75,7 @@ void sensorArrayCalibrar() {
   unsigned long lastTime = 0;
   boolean ledStatus = HIGH;
 
-  for (int i = 0; i < 200; i++) {
+  for (int i = 0; i < 100; i++) {
     array.calibrate(); // make the calibration take about 10 seconds
 
     // faz o LED piscar durante a calibragem
@@ -143,6 +149,7 @@ void sensorLaterais() {
   Serial.print('\t');
   Serial.print("countEsq: ");
   Serial.println(sensorEsqCount);
+  Serial.println("---------------");
 #endif
 }
 
@@ -166,11 +173,14 @@ void pinConfiguration() {
 }
 
 void velociadeCond() {
+  //veloMax = (sensorEsqCount%2) > 0 ? MAX_SPEED : MAX_SPEED_LINE;
+  //veloBase = (sensorEsqCount%2) > 0 ? BASE_SPEED : BASE_SPEED_LINE;
+
   // Impede o motor de ir alem da velocidade maxima
-  if (rightMotorSpeed > MAX_SPEED)
-    rightMotorSpeed = MAX_SPEED;
-  if (leftMotorSpeed > MAX_SPEED)
-    leftMotorSpeed = MAX_SPEED;
+  if (rightMotorSpeed > veloMax)
+    rightMotorSpeed = veloMax;
+  if (leftMotorSpeed > veloMax)
+    leftMotorSpeed = veloMax;
 
   // Mantem a velocidade do motor positiva
   if (rightMotorSpeed < 0)
@@ -180,8 +190,10 @@ void velociadeCond() {
 }
 
 void velocidadeCalc() {
-  rightMotorSpeed = BASE_SPEED + PID();
-  leftMotorSpeed = BASE_SPEED - PID();
+  rightMotorSpeed = veloBase + PID();
+  leftMotorSpeed = veloBase - PID();
+  //Serial.print("PID: ");
+  //Serial.println(PIDcalc);
 }
 
 void velociadeControl() {
@@ -189,15 +201,20 @@ void velociadeControl() {
   analogWrite(RIGHT_MOTOR_PWM, rightMotorSpeed);
   digitalWrite(LEFT_MOTOR, LOW);
   analogWrite(LEFT_MOTOR_PWM, leftMotorSpeed);
+
+ /*  Serial.print(leftMotorSpeed);
+  Serial.print('\t');
+  Serial.print(rightMotorSpeed);
+  Serial.println('\t'); */
 }
 
 void stopCondition() {
   // Caso stisfaça os pontos de parada, inicia parada dos motores
   if (sensorDirCount >= STOP_INDICATORS) {
     digitalWrite(RIGHT_MOTOR, LOW);
-    analogWrite(RIGHT_MOTOR_PWM, BASE_SPEED);
+    analogWrite(RIGHT_MOTOR_PWM, veloBase);
     digitalWrite(LEFT_MOTOR, LOW);
-    analogWrite(LEFT_MOTOR_PWM, BASE_SPEED);
+    analogWrite(LEFT_MOTOR_PWM, veloBase);
     delay(300);
     digitalWrite(RIGHT_MOTOR, LOW);
     analogWrite(RIGHT_MOTOR_PWM, 0);
