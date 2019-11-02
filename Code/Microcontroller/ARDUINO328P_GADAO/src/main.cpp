@@ -137,11 +137,13 @@ void verifCurva() {
     if ((actualTime - lastTime) > TIME_CONST) {
       statusCurva = false;
       lastTime = actualTime;
-      Serial.println("linha");
+      digitalWrite(LED, LOW);
+      //Serial.println("linha");
     }
   } else {
     statusCurva = true;
-    Serial.println("curva");
+    digitalWrite(LED, HIGH);
+    //Serial.println("curva");
   }
 
   // Verificar lógica do status curva
@@ -201,7 +203,7 @@ void pinConfiguration() {
 }
 
 void velociadeCond() {
-  if (statusCurva) {
+  if (!statusCurva) {
     veloBase = BASE_SPEED_LINE;
     veloMax = MAX_SPEED_LINE;
     atualKD = KD_LINE;

@@ -6,7 +6,7 @@
 
 // verif curva
 // ms
-#define TIME_CONST 500
+#define TIME_CONST 250
 // posicao
 #define THRESHOLD 300
 
@@ -14,16 +14,16 @@
 #define KI 0.0
 
 // LINHA
-#define MAX_SPEED_LINE 200
-#define BASE_SPEED_LINE 200
+#define MAX_SPEED_LINE 250
+#define BASE_SPEED_LINE 250
 #define KP_LINE 0.09
 #define KD_LINE 0.9
 
 // CURVA
 #define MAX_SPEED 200
 #define BASE_SPEED 100
-#define KP 0.05 // kp bom 0.04
-#define KD 0.5  // kd bom 0.4
+#define KP 0.1 // kp bom 0.04
+#define KD 0  // kd bom 0.4
 
 // numero de sensores, tempo de espera apos calibragem
 #define NUM_SENSORS 6
