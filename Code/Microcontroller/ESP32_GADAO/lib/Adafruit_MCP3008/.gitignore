@@ -1,7 +1,4 @@
-dist
-
-# Prerequisites
-*.d
+test
 
 # Compiled Object files
 *.slo
@@ -32,5 +29,11 @@ dist
 *.exe
 *.out
 *.app
+# osx
+.DS_Store
 
-/.vscode
+# doxygen
+Doxyfile*
+doxygen_sqlite3.db
+html
+*.tmp
