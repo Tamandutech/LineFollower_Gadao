@@ -136,8 +136,59 @@ void ESPDashClass::init(AsyncWebServer& server){
     server.addHandler(&ws);
 }
 
+// Add Number Card with Default Value
+void ESPDashClass::addIRArrayCard(const char* _id, const char* _name){
+    if(_id != NULL){
+        for(int i=0; i < IRARRAY_CARD_LIMIT; i++){
+            if(irarray_card_id[i] == ""){
+                #if defined(DEBUG_MODE)
+                    Serial.println("[DASH] Found an empty slot in Number Cards. Inserted New Card at Index ["+String(i)+"].");
+                #endif
 
+                irarray_card_id[i] = _id;
+                irarray_card_name[i] = _name;
+                irarray_card_value[i] = 0;
 
+                ws.textAll("{\"response\": \"updateLayout\"}");
+                break;
+            }
+        }
+        return;
+    }else{
+        return;
+    }
+}
+
+// Update Number Card with Custom Value
+void ESPDashClass::updateIRArrayCard(const char* _id, int _value){
+    for(int i=0; i < NUMBER_CARD_LIMIT; i++){
+        if(irarray_card_id[i] == _id){
+            #if defined(DEBUG_MODE)
+                Serial.println("[DASH] Updated IRArray Card at Index ["+String(i)+"].");
+            #endif
+
+            number_card_value[i] = _value;
+
+            DynamicJsonDocument doc(250);
+            JsonObject object = doc.to<JsonObject>();
+            object["response"] = "updateIRArrayCard";
+            object["id"] = irarray_card_id[i];
+            object["value"] = irarray_card_value[i];
+            size_t len = measureJson(doc);
+            AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len);
+            if (buffer) {
+                serializeJson(doc, (char *)buffer->get(), len + 1);
+                ws.textAll(buffer);
+            }else{
+                #if defined(DEBUG_MODE)
+                    Serial.println("[DASH] Websocket Buffer Error");
+                #endif
+            }
+            break;
+        }
+    }
+    return;
+}
 
 /////////////////
 // Number Card //
@@ -925,6 +976,18 @@ void ESPDashClass::generateLayoutResponse(String& result){
     }
     // Add Cards
     JsonArray cards = root.createNestedArray("cards");
+    for(int i=0; i < IRARRAY_CARD_LIMIT; i++){
+        if(irarray_card_id[i] != ""){
+            DynamicJsonDocument carddoc(250);
+            JsonObject jsoncard = carddoc.to<JsonObject>();
+            jsoncard["id"] = irarray_card_id[i];
+            jsoncard["card_type"] = "irarray";
+            jsoncard["name"] = irarray_card_name[i];
+            jsoncard["value"] = irarray_card_value[i];
+            cards.add(jsoncard);
+        }
+    }
+
     for(int i=0; i < NUMBER_CARD_LIMIT; i++){
         if(number_card_id[i] != ""){
             DynamicJsonDocument carddoc(250);
@@ -1115,6 +1178,13 @@ size_t ESPDashClass::getTotalResponseCapacity(){
     size_t capacity = 0 + JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(10);
     size_t totalCards = 0;
 
+    for(int i=0; i < IRARRAY_CARD_LIMIT; i++){
+        if(irarray_card_id[i] != ""){
+            capacity += JSON_OBJECT_SIZE(3);
+            totalCards++;
+        }
+    }
+
     for(int i=0; i < NUMBER_CARD_LIMIT; i++){
         if(number_card_id[i] != ""){
             capacity += JSON_OBJECT_SIZE(3);
@@ -1177,6 +1247,15 @@ size_t ESPDashClass::getTotalResponseCapacity(){
     return capacity;
 }
 
+size_t ESPDashClass::getIRArrayCardsLen(){
+    size_t total = 0;
+    for(int i=0; i < IRARRAY_CARD_LIMIT; i++){
+        if(irarray_card_id[i] != ""){
+            total++;
+        }
+    }
+    return total;
+}
 
 size_t ESPDashClass::getNumberCardsLen(){
     size_t total = 0;

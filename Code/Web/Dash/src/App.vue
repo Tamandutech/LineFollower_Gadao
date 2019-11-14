@@ -41,7 +41,8 @@ export default {
                 number: [],
                 lineChart: [],
                 gauge: [],
-                slider:[]
+                slider:[],
+                irarray:[]
             }
         }
     },
@@ -75,6 +76,7 @@ export default {
                 this.cards.lineChart = [];
                 this.cards.gauge = [];
                 this.cards.slider = [];
+                this.cards.irarray = [];
                 this.stats.enabled = json.statistics.enabled;
                 if(this.stats.enabled){
                     this.stats.hardware = json.statistics.hardware;
@@ -156,6 +158,14 @@ export default {
                             });
                             break;
 
+                        case "irarray":
+                            this.cards.irarray.push({
+                                id: card.id,
+                                name: card.name,
+                                value: card.value
+                            });
+                            break;
+
                         default:
                             break;
                     }
@@ -175,6 +185,12 @@ export default {
                 });
             }else if(json.response == "updateNumberCard"){
                 this.cards.number.forEach((card) => {
+                    if(card.id == json.id){
+                        card.value = json.value;
+                    }
+                });
+            }else if(json.response == "updateIRArrayCard"){
+                this.cards.irarray.forEach((card) => {
                     if(card.id == json.id){
                         card.value = json.value;
                     }

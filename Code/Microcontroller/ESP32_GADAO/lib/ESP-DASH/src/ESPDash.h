@@ -68,6 +68,7 @@ typedef std::function<void(const char* sliderId, int sliderValue)> DashSliderHan
 #elif defined(ESP32)
     #define BUTTON_CARD_LIMIT 50
     #define NUMBER_CARD_LIMIT 50
+    #define IRARRAY_CARD_LIMIT 50
     #define TEMPERATURE_CARD_LIMIT 50
     #define HUMIDITY_CARD_LIMIT 50
     #define STATUS_CARD_LIMIT 50
@@ -83,6 +84,9 @@ class ESPDashClass{
     public:
         void init(AsyncWebServer& server);
         void disableStats();    // To Disable Stats and disable reboot
+
+        void addIRArrayCard(const char* _id, const char* _name); // Add Number card with default value
+        void updateIRArrayCard(const char* _id, int _value); // Update Number Card with custom value
 
         void addNumberCard(const char* _id, const char* _name); // Add Number card with default value
         void addNumberCard(const char* _id, const char* _name, int _value); // Add Number card with custom value
@@ -138,6 +142,12 @@ class ESPDashClass{
         // (Handle Incomming Websocket Requests via Card ID) Card ID -> Card Name
         String button_card_id[BUTTON_CARD_LIMIT] = {};
         String button_card_name[BUTTON_CARD_LIMIT] = {};
+
+        // IRArray Cards
+        // Card ID -> Card Name -> Integer Value
+        String irarray_card_id[IRARRAY_CARD_LIMIT] = {};
+        String irarray_card_name[IRARRAY_CARD_LIMIT] = {};
+        uint16_t irarray_card_value[IRARRAY_CARD_LIMIT] = {};
 
         // Number Cards
         // Card ID -> Card Name -> Integer Value
@@ -220,6 +230,7 @@ class ESPDashClass{
         void generateStatsResponse(String& result);
         void generateRebootResponse(String& result);
         size_t getTotalResponseCapacity();
+        size_t getIRArrayCardsLen();
         size_t getNumberCardsLen();
         size_t getTemperatureCardsLen();
         size_t getHumidityCardsLen();
