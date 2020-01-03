@@ -52,6 +52,6 @@ export default {
 }
 
 .card svg:active{
-  color:dodgerblue;
+  color:#047904;
 }
 </style>

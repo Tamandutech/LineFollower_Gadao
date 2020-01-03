@@ -3,7 +3,7 @@
       <div class="container">
         <div class="columns is-multiline">
           <number-card v-for="card in cards.number" :key="card.id" :name="card.name" :value="card.value"></number-card>
-          <irarray-card v-for="card in cards.irarray" :key="card.id" :name="card.name" :value="card.value"></irarray-card>
+          <arrayCard v-for="card in cards.irarray" :key="card.id" :name="card.name" :value="card.value"></arrayCard>
           <temperature-card v-for="card in cards.temperature" :key="card.id" :name="card.name" :value="card.value" :type="card.value_type"></temperature-card>
           <humdidity-card v-for="card in cards.humidity" :key="card.id" :name="card.name" :value="card.value"></humdidity-card>
           <status-card v-for="card in cards.status" :key="card.id" :name="card.name" :value="card.value"></status-card>
@@ -37,7 +37,7 @@ import ButtonCard from '@/components/ButtonCard.vue';
 import LineChart from '@/components/LineChart.vue';
 import GaugeCard from '@/components/GaugeCard.vue';
 import SliderCard from '@/components/SliderCard.vue';
-import IRArrayCard from '@/components/IRArrayCard.vue';
+import ArrayCard from '@/components/IRArrayCard.vue';
 
 export default {
   name: 'home',
@@ -53,7 +53,7 @@ export default {
     LineChart,
     GaugeCard,
     SliderCard,
-    IRArrayCard
+    ArrayCard
   },
 
   computed: {

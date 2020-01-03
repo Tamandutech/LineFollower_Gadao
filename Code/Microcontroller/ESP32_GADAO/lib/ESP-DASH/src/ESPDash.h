@@ -45,7 +45,7 @@
 typedef std::function<void(const char* buttonId)> DashButtonHandler;
 typedef std::function<void(const char* sliderId, int sliderValue)> DashSliderHandler;
 
-#define DEBUG_MODE 1 // change to 1 for DEBUG Messages
+#define DEBUG_MODE 0 // change to 1 for DEBUG Messages
 
 // Debug mode
 #ifndef DEBUG_MODE
@@ -86,7 +86,7 @@ class ESPDashClass{
         void disableStats();    // To Disable Stats and disable reboot
 
         void addIRArrayCard(const char* _id, const char* _name); // Add Number card with default value
-        void updateIRArrayCard(const char* _id, int _value); // Update Number Card with custom value
+        void updateIRArrayCard(const char* _id, int _value[]); // Update Number Card with custom value
 
         void addNumberCard(const char* _id, const char* _name); // Add Number card with default value
         void addNumberCard(const char* _id, const char* _name, int _value); // Add Number card with custom value
@@ -147,7 +147,7 @@ class ESPDashClass{
         // Card ID -> Card Name -> Integer Value
         String irarray_card_id[IRARRAY_CARD_LIMIT] = {};
         String irarray_card_name[IRARRAY_CARD_LIMIT] = {};
-        uint16_t irarray_card_value[IRARRAY_CARD_LIMIT] = {};
+        String irarray_card_value[IRARRAY_CARD_LIMIT] = {};
 
         // Number Cards
         // Card ID -> Card Name -> Integer Value

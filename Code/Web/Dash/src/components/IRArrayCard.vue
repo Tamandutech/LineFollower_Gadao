@@ -1,41 +1,57 @@
 <template>
-    <!-- IRArray Card -->
-    <div class="column is-3">
-      <div class="card">
-        <span class="dot" :class="{'active': activity}"></span>
-        <div class="card-content">
-          <header><h5>{{name}}</h5></header>
-          <p><b>{{value}}</b></p>
+  <!-- IRArray Card -->
+  <div class="container">
+    <div class="columns">
+      <div class="column" v-for="(value, valueKey) in values">
+
+        <div class="level-item has-text-centered">
+          <div>
+            <p class="heading">Sensor {{valueKey + 1}}</p>
+            <p class="title">{{value}}</p>
+          </div>
         </div>
+
+        <!-- <span class="dot" :class="{'active': activity}"></span> -->
       </div>
     </div>
+  </div>
 </template>
 
 <script>
 export default {
-  props:['id', 'name', 'value'],
+  props: ["id", "name", "value"],
 
-  data(){
-    return{
-      activity: true
+  computed: {
+    values: function() {
+      return this.value.split(",");
     }
+  },
+
+  data() {
+    return {
+      activity: true
+    };
   },
 
   watch: {
-      value: function() {
+    value: function() {
       this.activity = true;
-      setTimeout(() => {this.activity = false}, 100);
+      setTimeout(() => {
+        this.activity = false;
+      }, 100);
     }
   },
 
-  mounted(){
-    setTimeout(() => { this.activity = false }, 500);
+  mounted() {
+    setTimeout(() => {
+      this.activity = false;
+    }, 500);
   }
-}
+};
 </script>
 
 <style scoped>
-.card p{
+.card p {
   font-size: 4rem;
 }
 </style>

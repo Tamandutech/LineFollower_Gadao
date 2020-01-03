@@ -95,7 +95,7 @@ export default {
 
 .navbar-item.is-active{
   background-color: #fafafa !important;
-  color: #3273dc !important;
+  color: #047904 !important;
 }
 
 .button{

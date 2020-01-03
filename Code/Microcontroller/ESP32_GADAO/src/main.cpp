@@ -43,15 +43,7 @@ void DASHCode(void *parameter) {
 
   ESPDash.addSliderCard("slider1", "Slider PWM", 2);
   ESPDash.attachSliderChanged(sliderAlterado);
-
-  ESPDash.addIRArrayCard("num1", "Sensor 1");
-  ESPDash.addNumberCard("num2", "Sensor 2", 0);
-  ESPDash.addNumberCard("num3", "Sensor 3", 0);
-  ESPDash.addNumberCard("num4", "Sensor 4", 0);
-  ESPDash.addNumberCard("num5", "Sensor 5", 0);
-  ESPDash.addNumberCard("num6", "Sensor 6", 0);
-  ESPDash.addNumberCard("num7", "Sensor 7", 0);
-  ESPDash.addNumberCard("num8", "Sensor 8", 0);
+  ESPDash.addIRArrayCard("array1", "Array 1");
 
   AsyncOTA.begin(&server);
 
@@ -61,14 +53,11 @@ void DASHCode(void *parameter) {
     AsyncOTA.loop();
 
     if ((timeDASH + 300) < millis()) {
-      ESPDash.updateIRArrayCard("num1", adc.readADC(0));
-      ESPDash.updateNumberCard("num2", adc.readADC(1));
-      ESPDash.updateNumberCard("num3", adc.readADC(2));
-      ESPDash.updateNumberCard("num4", adc.readADC(3));
-      ESPDash.updateNumberCard("num5", adc.readADC(4));
-      ESPDash.updateNumberCard("num6", adc.readADC(5));
-      ESPDash.updateNumberCard("num7", adc.readADC(6));
-      ESPDash.updateNumberCard("num8", adc.readADC(7));
+      ESPDash.updateIRArrayCard(
+          "array1", new int[8]{adc.readADC(0), adc.readADC(1), adc.readADC(2),
+                               adc.readADC(3), adc.readADC(4), adc.readADC(5),
+                               adc.readADC(6), adc.readADC(7)});
+
       timeDASH = millis();
     }
   }
@@ -93,7 +82,7 @@ void setup() {
   pinMode(23, INPUT);
   pinMode(LED_BUILTIN, OUTPUT);
 
-   xTaskCreatePinnedToCore(DASHCode, /* Function to implement the task */
+  xTaskCreatePinnedToCore(DASHCode, /* Function to implement the task */
                           "DASH",   /* Name of the task */
                           10000,    /* Stack size in words */
                           NULL,     /* Task input parameter */
