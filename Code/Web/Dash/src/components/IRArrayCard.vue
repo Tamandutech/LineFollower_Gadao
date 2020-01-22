@@ -2,7 +2,7 @@
   <!-- IRArray Card -->
   <div class="container">
     <div class="columns">
-      <div class="column" v-for="(value, valueKey) in values">
+      <div class="column" v-for="(value, valueKey) in values" v-bind:key="valueKey">
 
         <div class="level-item has-text-centered">
           <div>
