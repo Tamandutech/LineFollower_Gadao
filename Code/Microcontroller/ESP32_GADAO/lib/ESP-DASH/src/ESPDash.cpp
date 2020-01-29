@@ -1,4 +1,5 @@
 #include "ESPDash.h"
+#include <Update.h>
 #include <functional>
 
 AsyncWebSocket ws("/dashws");
@@ -132,6 +133,42 @@ void ESPDashClass::init(AsyncWebServer &server) {
     response->addHeader("Content-Encoding", "gzip");
     request->send(response);
   });
+
+  server.on(
+      "/update", HTTP_POST,
+      [&](AsyncWebServerRequest *request) {
+        // the request handler is triggered after the upload has finished...
+        // create the response, add header, and send response
+        AsyncWebServerResponse *response = request->beginResponse(
+            (Update.hasError()) ? 500 : 200, "text/plain",
+            (Update.hasError()) ? "FAIL" : "OK");
+        response->addHeader("Connection", "close");
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        request->send(response);
+        restartRequired = true;
+      },
+      [](AsyncWebServerRequest *request, String filename, size_t index,
+         uint8_t *data, size_t len, bool final) {
+        // Upload handler chunks in data
+        if (!index) {
+          if (!Update.begin(
+                  UPDATE_SIZE_UNKNOWN)) { // Start with max available size
+            Update.printError(Serial);
+          }
+        }
+
+        // Write chunked data to the free sketch space
+        if (Update.write(data, len) != len) {
+          Update.printError(Serial);
+        }
+
+        if (final) { // if the final flag is set then this is the last frame of
+                     // data
+          if (Update.end(
+                  true)) { // true to set the size to the current progress
+          }
+        }
+      });
 
 #if DEBUG_MODE == 1
   server.on("/debug", HTTP_GET, [&](AsyncWebServerRequest *request) {

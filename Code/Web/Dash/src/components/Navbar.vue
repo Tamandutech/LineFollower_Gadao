@@ -20,16 +20,16 @@
       <router-link tag="a" class="navbar-item" to="/info" exact>
         <div class="icon"><zap-icon></zap-icon></div> <span class="is-hidden-desktop"> &nbsp; Info</span>
       </router-link>
-      <!-- <router-link tag="a" class="navbar-item" to="/about" exact>
-        <div class="icon"><info-icon></info-icon></div> <span class="is-hidden-desktop"> &nbsp; About</span>
-      </router-link> -->
-    </div>
+      <router-link tag="a" class="navbar-item" to="/ota" exact>
+        <div class="icon"><upload-icon></upload-icon></div> <span class="is-hidden-desktop"> &nbsp; OTA</span>
+      </router-link>
+  </div>
   </div>
 </nav>
 </template>
 
 <script>
-import { ZapIcon, HomeIcon, /* InfoIcon */ } from 'vue-feather-icons'
+import { ZapIcon, HomeIcon, UploadIcon} from 'vue-feather-icons'
 
 export default {
     props:['connected'],
@@ -37,7 +37,7 @@ export default {
     components: {
         ZapIcon,
         HomeIcon,
-        /* InfoIcon */
+        UploadIcon
     },
 
     data(){

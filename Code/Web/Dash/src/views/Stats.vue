@@ -8,10 +8,7 @@
             <div><b>Sketch Hash:</b> &nbsp; {{stats.sketchHash}}</div><br/>
             <div><b>MAC Address:</b> &nbsp; {{stats.macAddress}}</div><br/>
             <div><b>Tipo de Conexão:</b> &nbsp; {{getWifiMode}}</div><br/>
-            <br/>
             <div><b>Reiniciar MCU:</b> &nbsp; <button class="button is-danger is-small" @click="$emit('reboot')"><div class="icon"><refresh-ccw-icon></refresh-ccw-icon></div></button></div>
-            <br/>
-            <div><b>Atualizar Firmware:</b> &nbsp; <button class="button is-link is-small" onclick=" window.open('/update','_blank')"><div class="icon"><upload-icon></upload-icon></div></button></div>
         </div>
         <div class="section" v-else>
             <div class="row">
@@ -28,14 +25,13 @@
 </template>
 
 <script>
-import { UploadIcon , RefreshCcwIcon, LockIcon } from 'vue-feather-icons'
+import { RefreshCcwIcon, LockIcon } from 'vue-feather-icons'
 
 export default {
     props:['stats'],
     components:{
         LockIcon,
-        RefreshCcwIcon,
-        UploadIcon 
+        RefreshCcwIcon
     },
 
     computed:{

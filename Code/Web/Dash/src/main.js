@@ -1,7 +1,9 @@
 import Vue from 'vue'
 import VueApexCharts from 'vue-apexcharts';
+import axios from 'axios'
+import VueAxios from 'vue-axios'
 
-Vue.use(VueApexCharts)
+Vue.use(VueApexCharts, VueAxios, axios)
 Vue.component('apexchart', VueApexCharts)
 
 import './styles/custom.scss';

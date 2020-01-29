@@ -2,7 +2,7 @@
 
 #include <Adafruit_MCP3008.h>
 #include <Arduino.h>
-#include <AsyncOTA.h>
+//#include <AsyncOTA.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPDash.h>
@@ -45,12 +45,20 @@ void DASHCode(void *parameter) {
   ESPDash.attachSliderChanged(sliderAlterado);
   ESPDash.addIRArrayCard("array1", "Array 1");
 
-  AsyncOTA.begin(&server);
-
+  // AsyncOTA.begin(&server);
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin",
+                                       "http://localhost:8080");
+  server.onNotFound([](AsyncWebServerRequest *request) {
+    if (request->method() == HTTP_OPTIONS) {
+      request->send(200);
+    } else {
+      request->send(404);
+    }
+  });
   server.begin();
 
   for (;;) {
-    AsyncOTA.loop();
+    ESPDash.loop();
 
     if ((timeDASH + 300) < millis()) {
       ESPDash.updateIRArrayCard(
