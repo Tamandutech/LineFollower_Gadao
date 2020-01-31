@@ -84,7 +84,7 @@ export default {
     Make the request to the POST /single-file URL
   */
       axios
-        .post("http://192.168.15.20/update", formData, {
+        .post("http://"+document.location.host+"/update", formData, {
           headers: {
             "Content-Type": "multipart/form-data"
           },
