@@ -4,6 +4,15 @@
         "PLATFORMIO_CALLER": "vscode"
     },
     "files.associations": {
-        "functional": "cpp"
+        "functional": "cpp",
+        "*.tcc": "cpp",
+        "fstream": "cpp",
+        "exception": "cpp",
+        "iosfwd": "cpp",
+        "new": "cpp",
+        "ostream": "cpp",
+        "sstream": "cpp",
+        "streambuf": "cpp",
+        "system_error": "cpp"
     }
 }

@@ -35,23 +35,22 @@
 #include "ArduinoJson.h"
 #include "AsyncTCP.h"
 #include "ESPAsyncWebServer.h"
+#include "SPIFFS.h"
 #include "WiFi.h"
 #include <esp_int_wdt.h>
 #include <esp_task_wdt.h>
 #endif
 
-#include "webpage.h"
-
 typedef std::function<void(const char *buttonId)> DashButtonHandler;
 typedef std::function<void(const char *sliderId, int sliderValue)>
     DashSliderHandler;
 
-#define DEBUG_MODE 0 // change to 1 for DEBUG Messages
+#define DEBUG_MODE 1 // change to 1 for DEBUG Messages
 
 // Debug mode
-#ifndef DEBUG_MODE
+/* #ifndef DEBUG_MODE
 #define DEBUG_MODE 0
-#endif
+#endif */
 
 #define TEMPERATURE_CARD_TYPES 6
 #define STATUS_CARD_TYPES 4
@@ -81,6 +80,7 @@ typedef std::function<void(const char *sliderId, int sliderValue)>
 class ESPDashClass {
 
 public:
+  void loop();
   void init(AsyncWebServer &server);
   void disableStats(); // To Disable Stats and disable reboot
 
@@ -158,19 +158,10 @@ public:
     _sliderChangedFunc = handler;
   }
 
-  void loop() {
-    if (restartRequired) {
-      yield();
-      delay(1000);
-      yield();
-      esp_task_wdt_init(1, true);
-      esp_task_wdt_add(NULL);
-      while (true)
-        ;
-    }
-  }
-
 private:
+  // OTA
+  bool restartRequired = false;
+
   bool stats_enabled = true;
   DashButtonHandler _buttonClickFunc;
   DashSliderHandler _sliderChangedFunc;
@@ -279,9 +270,6 @@ private:
   size_t getLineChartsLen();
   size_t getGaugeChartsLen();
   size_t getSliderCardsLen();
-
-  // OTA
-  bool restartRequired = false;
 };
 
 extern ESPDashClass ESPDash;

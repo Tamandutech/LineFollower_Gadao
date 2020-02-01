@@ -62,4 +62,7 @@ const uint8_t DASH_HTML[] PROGMEM = { ${indexHTML} };
 `;
 
     fs.writeFileSync(__dirname + '/dist/webpage_zopfli.h', source, 'utf8');
+
+
+    fs.writeFileSync(__dirname + '/dist/webpage_gziped.html.gz', output, 'utf8');
 });

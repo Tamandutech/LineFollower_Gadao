@@ -125,15 +125,34 @@ void ESPDashClass::onWsEvent(AsyncWebSocket *server,
 // Public Functions //
 //////////////////////
 
+void ESPDashClass::loop() {
+    ws.cleanupClients();
+    ws._cleanBuffers();
+    if (restartRequired) {
+      yield();
+      delay(1000);
+      yield();
+      esp_task_wdt_init(1, true);
+      esp_task_wdt_add(NULL);
+      while (true)
+        ;
+    }
+  }
+
 void ESPDashClass::init(AsyncWebServer &server) {
+  // Serve a página
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     // Send File
-    AsyncWebServerResponse *response =
+    /* AsyncWebServerResponse *response =
         request->beginResponse_P(200, "text/html", DASH_HTML, DASH_HTML_SIZE);
+     */
+    AsyncWebServerResponse *response =
+        request->beginResponse(SPIFFS, "/webpage_gziped.html.gz", "text/html");
     response->addHeader("Content-Encoding", "gzip");
     request->send(response);
   });
 
+  // Caminho para atualização do programa
   server.on(
       "/update", HTTP_POST,
       [&](AsyncWebServerRequest *request) {
@@ -149,6 +168,18 @@ void ESPDashClass::init(AsyncWebServer &server) {
       },
       [](AsyncWebServerRequest *request, String filename, size_t index,
          uint8_t *data, size_t len, bool final) {
+        // Clean SPIFFS
+        SPIFFS.end();
+
+        // Disable client connections
+        ws.enable(false);
+
+        // Advertise connected clients what's going on
+        ws.textAll("OTA Update Started");
+
+        // Close them
+        ws.closeAll();
+
         // Upload handler chunks in data
         if (!index) {
           if (!Update.begin(
@@ -167,6 +198,50 @@ void ESPDashClass::init(AsyncWebServer &server) {
           if (Update.end(
                   true)) { // true to set the size to the current progress
           }
+        }
+      });
+
+  // Caminho para atualização do SPIFFS
+  server.on(
+      "/updatespiffs", HTTP_POST,
+      [&](AsyncWebServerRequest *request) {
+        // the request handler is triggered after the upload has finished...
+        // create the response, add header, and send response
+        AsyncWebServerResponse *response =
+            request->beginResponse(200, "text/plain");
+        response->addHeader("Connection", "close");
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        request->send(response);
+        restartRequired = true;
+      },
+      [](AsyncWebServerRequest *request, String filename, size_t index,
+         uint8_t *data, size_t len, bool final) {
+        // Disable client connections
+        ws.enable(false);
+
+        // Advertise connected clients what's going on
+        ws.textAll("SPIFFS Update Started");
+
+        // Close them
+        ws.closeAll();
+
+        // Upload handler chunks in data
+        if (!index) {
+          if (!SPIFFS.begin(true)) { // Start with max available size
+            Update.printError(Serial);
+          } else {
+            if (SPIFFS.exists("/" + filename))
+              SPIFFS.remove("/" + filename);
+          }
+        }
+
+        // Write chunked data to the free sketch space
+        if (SPIFFS.open("/" + filename, "a").write(data, len) != len) {
+          // Update.printError(Serial);
+        }
+
+        if (final) { // if the final flag is set then this is the last frame of
+                     // data
         }
       });
 
