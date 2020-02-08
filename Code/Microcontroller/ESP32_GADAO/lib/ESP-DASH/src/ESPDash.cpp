@@ -283,7 +283,7 @@ void ESPDashClass::addIRArrayCard(const char *_id, const char *_name) {
 }
 
 // Update Number Card with Custom Value
-void ESPDashClass::updateIRArrayCard(const char *_id, int _value[]) {
+void ESPDashClass::updateIRArrayCard(const char *_id, int _value[], size_t sizeArray) {
   for (int i = 0; i < IRARRAY_CARD_LIMIT; i++) {
     if (irarray_card_id[i] == _id) {
 #if defined(DEBUG_MODE)
@@ -291,7 +291,6 @@ void ESPDashClass::updateIRArrayCard(const char *_id, int _value[]) {
                      "].");
 #endif
       String values = "";
-      int sizeArray = 8;
 
       for (int j = 0; j < sizeArray - 1; j++) {
         values += String(_value[j]);

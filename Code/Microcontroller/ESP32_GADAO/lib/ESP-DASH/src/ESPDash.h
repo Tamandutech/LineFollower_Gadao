@@ -87,7 +87,7 @@ public:
   void addIRArrayCard(const char *_id,
                       const char *_name); // Add Number card with default value
   void updateIRArrayCard(const char *_id,
-                         int _value[]); // Update Number Card with custom value
+                         int _value[], size_t sizeArray); // Update Number Card with custom value
 
   void addNumberCard(const char *_id,
                      const char *_name); // Add Number card with default value

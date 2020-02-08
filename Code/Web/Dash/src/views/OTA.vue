@@ -93,8 +93,8 @@
 import { UploadIcon } from "vue-feather-icons";
 import axios from "axios";
 
-let host = document.location.host;
-//let host = "192.168.15.54";
+//let host = document.location.host;
+let host = "192.168.15.167";
 
 export default {
   components: {

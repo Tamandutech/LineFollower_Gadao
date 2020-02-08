@@ -1,6 +1,10 @@
 <template>
   <!-- IRArray Card -->
-  <div class="container">
+ <div class="column">
+  <div class="box">
+    <div class = "has-text-centered">
+    <strong class>{{name}}</strong>
+    </div>
     <div class="columns">
       <div class="column" v-for="(value, valueKey) in values" v-bind:key="valueKey">
 
@@ -14,6 +18,7 @@
         <!-- <span class="dot" :class="{'active': activity}"></span> -->
       </div>
     </div>
+  </div>
   </div>
 </template>
 
