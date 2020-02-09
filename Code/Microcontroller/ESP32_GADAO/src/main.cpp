@@ -11,6 +11,7 @@
 #include <SPIFFS.h>
 #include <WiFi.h>
 #include <io.h>
+#include <mcp3008_linesensor.h>
 
 AsyncWebServer server(80);
 TaskHandle_t DASH;
@@ -23,7 +24,12 @@ ESP32MotorControl MotorControl = ESP32MotorControl();
 ESP32Encoder enc_esq;
 ESP32Encoder enc_dir;
 
-TaskHandle_t TaskHandleDASHUpdate = NULL;
+// Instância do timer
+hw_timer_t *timer = NULL;
+
+// Instância do array
+using namespace mcp3008;
+LineSensor ls;
 
 #if defined WIFI_MODE_SERVE
 const char *ssid = "TT-Gadao";
@@ -38,16 +44,52 @@ const char *password = "941138872";
 #define LEDC_BASE_FREQ 5000
 #define LED_PIN LED_BUILTIN
 
-void sliderAlterado(const char *id, const int sliderValue) {
-  MotorControl.motorForward(0, sliderValue);
-  MotorControl.motorForward(1, sliderValue);
+using namespace mcp3008;
+
+bool DASHUpdateTimer = false;
+
+int rightBaseSpeed = 0;
+int leftBaseSpeed = 0;
+
+void cb_timer() { DASHUpdateTimer = true; }
+
+void startTimer() {
+  // inicialização do timer.Parametros :
+  /* 0 - seleção do timer a ser usado, de 0 a 3.
+    80 - prescaler. O clock principal do ESP32 é 80MHz. Dividimos por 80
+  para ter 1us por tick. true - true para contador progressivo, false para
+  regressivo
+  */
+  timer = timerBegin(0, 80, true);
+
+  /*conecta à interrupção do timer
+   - timer é a instância do hw_timer
+   - endereço da função a ser chamada pelo timer
+   - edge=true gera uma interrupção
+  */
+  timerAttachInterrupt(timer, &cb_timer, true);
+
+  /* - o timer instanciado no inicio
+     - o valor em us para 1s
+     - auto-reload. true para repetir o alarme
+  */
+  timerAlarmWrite(timer, 300000, true);
+
+  // ativa o alarme
+  timerAlarmEnable(timer);
 }
 
-static void DASHUpdate(void *pvParameters) {
-  ESPDash.updateIRArrayCard(
-      "encoders",
-      new int[2]{(int32_t)enc_esq.getCount(), (int32_t)enc_dir.getCount()}, 2);
+void stopTimer() {
+  timerEnd(timer);
+  timer = NULL;
 }
+
+void DASHUpdate() {
+  ESPDash.updateIRArrayCard(
+      "encoders", new int[2]{enc_esq.getCount(), enc_dir.getCount()}, 2);
+}
+
+void sliderAlterado(const char *id, const int sliderValue) {}
 
 void setup() {
   // Define IO que controla LED da placa como saída
@@ -79,8 +121,9 @@ void setup() {
   enc_esq.attachHalfQuad(ENC_MOT_ESQ_A, ENC_MOT_ESQ_B);
 
   // Anexa os IOs dos motores ao controlador dos motores
-  MotorControl.attachMotor(MOT_ESQ_F, MOT_ESQ_R);
-  MotorControl.attachMotor(MOT_DIR_F, MOT_DIR_R);
+  MotorControl.attachMotors(MOT_ESQ_F, MOT_ESQ_R, MOT_DIR_F, MOT_DIR_R);
+
+  Serial.begin(9600);
 
 #if defined WIFI_MODE_SERVE
   WiFi.mode(WIFI_AP);
@@ -92,10 +135,12 @@ void setup() {
   WiFi.begin(ssid, password);
 #endif
 
+  // Realiza conexão do WiFi
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.println("Connecting to WiFi..");
   }
+  Serial.println(WiFi.localIP());
 
   SPIFFS.begin(true);
   ESPDash.init(server);
@@ -107,9 +152,43 @@ void setup() {
   ESPDash.addIRArrayCard("encoders", "Encoders");
 
   server.begin();
+  startTimer();
+
+  Driver::Config cfg;
+  cfg.pin_cs = GPIO_NUM_22;
+  cfg.pin_miso = GPIO_NUM_19;
+  cfg.pin_mosi = GPIO_NUM_23;
+  cfg.pin_sck = GPIO_NUM_18;
+  cfg.spi_dev = VSPI_HOST;
+
+  ESP_ERROR_CHECK(ls.install(cfg));
 }
 
+float lastError = 0;
+float Kp = 0.07, Kd = 0;
+
 void loop() {
+  if (DASHUpdateTimer) {
+    DASHUpdate();
+    DASHUpdateTimer = false;
+  }
   ESPDash.loop();
   ftpSrv.handleFTP();
+
+  for (int i = 0; i < Driver::CHANNELS; ++i) {
+    Serial.print(ls.readChannel(i)); Serial.print("\t");
+  }
+
+  Serial.println(ls.readLine(true));
+
+  float error = ls.readLine(true);
+
+  float motorSpeed = (Kp * error) + (Kd * (error - lastError));
+  lastError = error;
+
+  int rightMotorSpeed = rightBaseSpeed + (motorSpeed * 100);
+  int leftMotorSpeed = leftBaseSpeed - (motorSpeed * 100);
+
+  MotorControl.motorForward(0, leftMotorSpeed);
+  MotorControl.motorForward(1, rightMotorSpeed);
 }
