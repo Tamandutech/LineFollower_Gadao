@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <AsyncTCP.h>
+#include <AutoPID.h>
 #include <ESP32Encoder.h>
 #include <ESP32MotorControl.h>
 #include <ESP8266FtpServer.h>
@@ -12,6 +13,12 @@
 #include <WiFi.h>
 #include <io.h>
 #include <mcp3008_linesensor.h>
+
+double inputPID, setpointPID = 0.0, outputPID, outputMinPID = -100,
+                 outputMaxPID = 100, Kp = 0.028, Ki = 0.0, Kd = 0.0;
+
+AutoPID dirPID(&inputPID, &setpointPID, &outputPID, outputMinPID, outputMaxPID,
+               Kp, Ki, Kd);
 
 AsyncWebServer server(80);
 TaskHandle_t DASH;
@@ -89,7 +96,10 @@ void DASHUpdate() {
       "encoders", new int[2]{enc_esq.getCount(), enc_dir.getCount()}, 2);
 }
 
-void sliderAlterado(const char *id, const int sliderValue) {}
+void sliderAlterado(const char *id, const int sliderValue) {
+  rightBaseSpeed = sliderValue;
+  leftBaseSpeed = sliderValue;
+}
 
 void setup() {
   // Define IO que controla LED da placa como saída
@@ -162,12 +172,13 @@ void setup() {
   cfg.spi_dev = VSPI_HOST;
 
   ESP_ERROR_CHECK(ls.install(cfg));
+
+  dirPID.setTimeStep(0);
 }
 
-float lastError = 0;
-float Kp = 0.07, Kd = 0;
-
 void loop() {
+  dirPID.run();
+
   if (DASHUpdateTimer) {
     DASHUpdate();
     DASHUpdateTimer = false;
@@ -176,18 +187,28 @@ void loop() {
   ftpSrv.handleFTP();
 
   for (int i = 0; i < Driver::CHANNELS; ++i) {
-    Serial.print(ls.readChannel(i)); Serial.print("\t");
+    Serial.print(ls.readChannel(i));
+    Serial.print("\t");
   }
 
   Serial.println(ls.readLine(true));
 
-  float error = ls.readLine(true);
+  float erroLido = ls.readLine(true);
 
-  float motorSpeed = (Kp * error) + (Kd * (error - lastError));
-  lastError = error;
+  if (erroLido >= -1 && erroLido <= 1)
+    inputPID = (erroLido * 4000);
 
-  int rightMotorSpeed = rightBaseSpeed + (motorSpeed * 100);
-  int leftMotorSpeed = leftBaseSpeed - (motorSpeed * 100);
+  Serial.printf("inputPID: %2.f\n", inputPID);
+  Serial.printf("outputPID: %2.f\n", outputPID);
+
+  int rightMotorSpeed = rightBaseSpeed + outputPID;
+  int leftMotorSpeed = leftBaseSpeed - outputPID;
+
+  if (rightMotorSpeed == 0)
+    rightMotorSpeed = 1;
+
+  if (leftMotorSpeed == 0)
+    leftMotorSpeed = 1;
 
   MotorControl.motorForward(0, leftMotorSpeed);
   MotorControl.motorForward(1, rightMotorSpeed);
