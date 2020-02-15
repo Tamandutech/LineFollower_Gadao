@@ -45,7 +45,7 @@ typedef std::function<void(const char *buttonId)> DashButtonHandler;
 typedef std::function<void(const char *sliderId, int sliderValue)>
     DashSliderHandler;
 
-//#define DEBUG_MODE 1 // change to 1 for DEBUG Messages
+#define DEBUG_MODE 1 // change to 1 for DEBUG Messages
 
 // Debug mode
 /* #ifndef DEBUG_MODE
