@@ -1,0 +1,3 @@
+[submodule "Code/Microcontroller/ESP32_GADAO/Code/Microcontroller/ESP32_GADAO/lib/Solutions_DASH"]
+	path = Code/Microcontroller/ESP32_GADAO/Code/Microcontroller/ESP32_GADAO/lib/Solutions_DASH
+	url = https://github.com/Tamandutech/Solutions_DASH.git

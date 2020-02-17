@@ -210,9 +210,7 @@ void loop() {
   carVal.rightMotorSpeed = carVal.rightBaseSpeed + dirPIDVal.output;
   carVal.leftMotorSpeed = carVal.leftBaseSpeed - dirPIDVal.output;
 
-  if ()
-
-    MotorControl.motorForward(0, constrain(carVal.leftMotorSpeed, 0, 100));
+  MotorControl.motorForward(0, constrain(carVal.leftMotorSpeed, 0, 100));
   MotorControl.motorForward(1, constrain(carVal.rightMotorSpeed, 0, 100));
 
   if ((lastTime + 1000) < millis()) {
