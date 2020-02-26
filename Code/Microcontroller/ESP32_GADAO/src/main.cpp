@@ -1,62 +1,80 @@
-#define WIFI_MODE_CONNECT
-#define DEBUG_ON
+#pragma region *Defines
 
-#define HOST_NAME "ESP32Braia"
+#pragma endregion Defines
 
+#pragma region *Includes
+
+#include <Adafruit_MCP3008.h>
 #include <Arduino.h>
-#include <RemoteDebug.h>
-//#include <AsyncTCP.h>
-#include <AutoPID.h>
+#include <DabbleESP32.h>
 #include <ESP32Encoder.h>
 #include <ESP32MotorControl.h>
-#include <ESP8266FtpServer.h>
-#include <ESPAsyncWebServer.h>
-#include <ESPDash.h>
-#include <Hash.h>
-#include <SPIFFS.h>
-#include <WiFi.h>
-#include <WiFiUdp.h>
+#include <PID_AutoTune_v0.h>
+#include <PID_v1.h>
+#include <QTRSensors.h>
+#include <Ticker.h>
 #include <io.h>
-#include <mcp3008_linesensor.h>
+
+#pragma endregion
+
+#pragma region *Variables
+
+String terminalBLE = "";
+
+byte ATuneModeRemember = 2;
+
+double kpmodel = 1.5, taup = 100, theta[50];
+double outputStart = 5;
+double aTuneStep = 50, aTuneNoise = 1, aTuneStartValue = 100;
+unsigned int aTuneLookBack = 20;
+
+boolean tuning = false;
+unsigned long modelTime, serialTime;
+
+// set to false to connect to the real world
+boolean useSimulation = false;
 
 struct valuesPID {
-  double input = 0.0;
-  double setpoint = 0.0;
-  double output = 0.0;
-  double outputMin = 0.0;
-  double outputMax = 0.0;
-  double Kp = 0.0;
-  double Ki = 0.0;
-  double Kd = 0.0;
+  double input = 0;
+  double setpoint = 180;
+  double output = 0;
+  double outputMin = -47;
+  double outputMax = +47;
+  double Kp = 0.08;
+  double Ki = 0.00;
+  double Kd = 0.00;
 };
 
 struct valuesCar {
-  float erroLido = 0.0;
-  int rightBaseSpeed = 0;
-  int leftBaseSpeed = 0;
+  int erroLido = 0;
+  int rightBaseSpeed = 74;
+  int leftBaseSpeed = 74;
   int rightMotorSpeed = 0;
   int leftMotorSpeed = 0;
   int gainKp = 0;
   int gainKd = 0;
+  bool running = false;
 };
+
+struct valuesLineSensor {
+  uint16_t channel[8];
+  float line;
+};
+
+#pragma endregion
+
+#pragma region *Instances
 
 valuesPID dirPIDVal;
 
 valuesCar carVal;
 
-AutoPID dirPID(&(dirPIDVal.input), &(dirPIDVal.setpoint), &(dirPIDVal.output),
-               dirPIDVal.outputMin, dirPIDVal.outputMax, dirPIDVal.Kp,
-               dirPIDVal.Ki, dirPIDVal.Kd);
+valuesLineSensor lsVal;
 
-RemoteDebug Debug;
+PID myPID(&(dirPIDVal.input), &(dirPIDVal.output), &(dirPIDVal.setpoint),
+          dirPIDVal.Kp, dirPIDVal.Ki, dirPIDVal.Kd, DIRECT);
 
-AsyncWebServer server(80);
-
-// Time
-uint32_t mLastTime = 0;
-uint32_t mTimeSeconds = 0;
-
-uint32_t lastTime = 0;
+PID_ATune aTune(&(dirPIDVal.input), &(dirPIDVal.output));
 
 // Instancia do controlador dos motores
 ESP32MotorControl MotorControl = ESP32MotorControl();
@@ -65,59 +83,227 @@ ESP32MotorControl MotorControl = ESP32MotorControl();
 ESP32Encoder enc_esq;
 ESP32Encoder enc_dir;
 
-// Instância do timer
-hw_timer_t *timer = NULL;
-
 // Instância do array
-using namespace mcp3008;
-LineSensor ls;
+Adafruit_MCP3008 adc;
+QTRSensors qtr;
 
-#if defined WIFI_MODE_SERVE
-const char *ssid = "TT-Gadao";
-const char *password = "guerreiro";
-#elif defined WIFI_MODE_CONNECT
-const char *ssid = "LineFollower_Gadao";
-const char *password = "guerreiro";
-#endif
+#pragma endregion
 
-using namespace mcp3008;
+#pragma region *Functions
 
-void sliderAlterado(const char *id, const int sliderValue) {
-  if (String(id).equals("velmotpidmax")) {
+#pragma region **Calibrar Sensor Array
+void calibSensor() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  for (uint16_t i = 0; i < 400; i++) {
+    qtr.calibrate();
+    delay(10);
+  }
+  digitalWrite(LED_BUILTIN, LOW);
+}
+#pragma endregion
 
-    dirPID.setOutputRange(-sliderValue, sliderValue);
-    dirPIDVal.outputMax = sliderValue;
+#pragma region **Funções do Tuning do PID
 
-    debugW("VelMotPID: %f\n", dirPIDVal.outputMax);
+#pragma region ***AutoTuneHelper()
+void AutoTuneHelper(boolean start) {
+  if (start)
+    ATuneModeRemember = myPID.GetMode();
+  else
+    myPID.SetMode(ATuneModeRemember);
+}
+#pragma endregion
 
-  } else if (String(id).equals("velmot")) {
+#pragma region ***changeAutoTune()
+void changeAutoTune() {
+  if (!tuning) {
+    // Set the output to the desired starting frequency.
+    dirPIDVal.output = aTuneStartValue;
+    aTune.SetNoiseBand(aTuneNoise);
+    aTune.SetOutputStep(aTuneStep);
+    aTune.SetLookbackSec((int)aTuneLookBack);
+    AutoTuneHelper(true);
+    tuning = true;
+  } else { // cancel autotune
+    aTune.Cancel();
+    tuning = false;
+    AutoTuneHelper(false);
+  }
+}
+#pragma endregion
 
-    carVal.rightBaseSpeed = carVal.leftBaseSpeed = sliderValue;
+#pragma region ***DoModel()
+void DoModel() {
+  // cycle the dead time
+  for (byte i = 0; i < 49; i++) {
+    theta[i] = theta[i + 1];
+  }
+  // compute the input
+  dirPIDVal.input = (kpmodel / taup) * (theta[0] - outputStart) +
+                    dirPIDVal.input * (1 - 1 / taup) +
+                    ((float)random(-10, 10)) / 100;
+}
+#pragma endregion
 
-    debugW("VelMot: %d\n", carVal.rightBaseSpeed);
+#pragma region ***PIDmaster()
+void PIDMaster() {
+  unsigned long now = millis();
 
-  } else if (String(id).equals("Kp")) {
-
-    carVal.gainKp = sliderValue;
-
-    debugW("Kp calculado: %f\n", dirPIDVal.Kp);
-
-  } else if (String(id).equals("Kd")) {
-    carVal.gainKd = sliderValue;
-
-    debugW("Kd calculado: %f\n", dirPIDVal.Kp);
+  if (!useSimulation) { // pull the input in from the real world
+    dirPIDVal.input = qtr.readLineBlack(&(lsVal.channel[0]));
   }
 
-  dirPIDVal.Kp = ((dirPIDVal.outputMax + carVal.rightBaseSpeed) / 3500) *
-                 (1 + (carVal.gainKp / 100));
+  if (tuning) {
+    byte val = (aTune.Runtime());
+    if (val != 0) {
+      tuning = false;
+    }
+    if (!tuning) { // we're done, set the tuning parameters
+      dirPIDVal.Kp = aTune.GetKp();
+      dirPIDVal.Ki = aTune.GetKi();
+      dirPIDVal.Kd = aTune.GetKd();
+      myPID.SetTunings(dirPIDVal.Kp, dirPIDVal.Ki, dirPIDVal.Kd);
+      AutoTuneHelper(false);
+    }
+  } else
+    myPID.Compute();
 
-  dirPIDVal.Kd = dirPIDVal.Kp * (1 + (carVal.gainKd / 100));
-
-  dirPID.setGains(dirPIDVal.Kp, 0.0, dirPIDVal.Kd);
-  dirPID.setGains(dirPIDVal.Kp, 0.0, dirPIDVal.Kd);
+  if (useSimulation) {
+    theta[30] = dirPIDVal.output;
+    if (now >= modelTime) {
+      modelTime += 100;
+      DoModel();
+    }
+  } else {
+    dirPIDVal.output = 0;
+  }
 }
 
+#pragma endregion
+
+#pragma endregion
+
+#pragma region **Funções do Terminal
+void SerialSend() {
+  String terminalOUT = "";
+
+  terminalOUT += "setpoint: ";
+  terminalOUT += dirPIDVal.setpoint;
+  terminalOUT += '\n';
+  terminalOUT += "input: ";
+  terminalOUT += dirPIDVal.input;
+  terminalOUT += '\n';
+  terminalOUT += "output: ";
+  terminalOUT += dirPIDVal.output;
+  terminalOUT += "\n---\n";
+  terminalOUT += "velMot    velPID\n";
+  terminalOUT += carVal.rightBaseSpeed;
+  terminalOUT += "            ";
+  terminalOUT += dirPIDVal.outputMax;
+  terminalOUT += "\n---\n";
+  if (tuning) {
+    terminalOUT += "tuning mode";
+  } else {
+    terminalOUT += "Kp      Ki       Kd\n";
+    terminalOUT += myPID.GetKp();
+    terminalOUT += "   ";
+    terminalOUT += myPID.GetKi();
+    terminalOUT += "   ";
+    terminalOUT += myPID.GetKd();
+    terminalOUT += "   ";
+  }
+
+  Terminal.print(terminalOUT);
+}
+
+void SerialReceive() {
+  if (Terminal.available() != 0) {
+    terminalBLE = "";
+    while (Terminal.available() != 0)
+      terminalBLE += Terminal.read();
+
+    switch (terminalBLE.charAt(0)) {
+    case 't':
+      if (terminalBLE.charAt(1) == 'u')
+        changeAutoTune();
+      break;
+
+    case 'k':
+      switch (terminalBLE.charAt(1)) {
+      case 'p':
+        dirPIDVal.Kp = terminalBLE.substring(2, terminalBLE.length()).toFloat();
+        myPID.SetTunings(dirPIDVal.Kp, dirPIDVal.Ki, dirPIDVal.Kd);
+        break;
+
+      case 'i':
+        dirPIDVal.Ki = terminalBLE.substring(2, terminalBLE.length()).toFloat();
+        myPID.SetTunings(dirPIDVal.Kp, dirPIDVal.Ki, dirPIDVal.Kd);
+        break;
+
+      case 'd':
+        dirPIDVal.Kd = terminalBLE.substring(2, terminalBLE.length()).toFloat();
+        myPID.SetTunings(dirPIDVal.Kp, dirPIDVal.Ki, dirPIDVal.Kd);
+        break;
+
+      default:
+        Terminal.print("Erro ao ler entrada\n");
+        break;
+      }
+
+    case 'r':
+      carVal.running = !carVal.running;
+      break;
+
+    case 'v':
+      switch (terminalBLE.charAt(1)) {
+      case 'p':
+        dirPIDVal.outputMax =
+            terminalBLE.substring(2, terminalBLE.length()).toInt();
+        dirPIDVal.outputMin = -dirPIDVal.outputMax;
+        myPID.SetOutputLimits(dirPIDVal.outputMin, dirPIDVal.outputMax);
+        break;
+
+      case 'm':
+        carVal.leftBaseSpeed = carVal.rightBaseSpeed =
+            terminalBLE.substring(2, terminalBLE.length()).toInt();
+        break;
+
+      default:
+        break;
+      }
+      break;
+
+    default:
+      Terminal.println("Entrada inválida!");
+      break;
+    }
+  }
+}
+#pragma endregion
+
+#pragma region **Motor Control Func
+void MotorControlFunc() {
+
+  carVal.rightMotorSpeed = carVal.rightBaseSpeed + dirPIDVal.output;
+  carVal.leftMotorSpeed = carVal.leftBaseSpeed - dirPIDVal.output;
+
+  if (carVal.running) {
+    MotorControl.motorForward(0, constrain(carVal.leftMotorSpeed, 0, 100));
+    MotorControl.motorForward(1, constrain(carVal.rightMotorSpeed, 0, 100));
+  } else {
+    MotorControl.motorsStop();
+  }
+}
+
+#pragma endregion
+
+#pragma endregion
+
+#pragma region *Setup
+
 void setup() {
+  // Define IO que controla o LED interno como saída
+  pinMode(LED_BUILTIN, OUTPUT);
+
   // Define IOs que controlam o driver do motor como saída
   pinMode(MOT_DIR_F, OUTPUT);
   pinMode(MOT_DIR_R, OUTPUT);
@@ -146,83 +332,48 @@ void setup() {
   // Anexa os IOs dos motores ao controlador dos motores
   MotorControl.attachMotors(MOT_ESQ_F, MOT_ESQ_R, MOT_DIR_F, MOT_DIR_R);
 
-  // Kp, Ki, Kd
-  // dirPID.setOutputRange(-15, 15);
-  // dirPID.setGains(((dirPIDVal.outputMax + carVal.rightBaseSpeed) / 3500),
-  // 0.0,
-  //                 0.0);
-  // debugW("Kp calculado: %f\n", dirPIDVal.Kp);
+  Serial.begin(115200);
+  Dabble.begin("Braia-BLE");
 
-  // carVal.leftBaseSpeed = 30;
-  // carVal.rightBaseSpeed = 30;
+  adc.begin(22);
 
-#if defined WIFI_MODE_SERVE
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(ssid, password);
-#elif defined WIFI_MODE_CONNECT
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  WiFi.setHostname("ESP-BRAIA");
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED)
-    ;
-#endif
+  qtr.setTypeAnalog();
+  qtr.setSensorPins(&adc, 8);
 
-  Debug.begin(HOST_NAME);
-  Debug.setResetCmdEnabled(true);
-  // Debug.showProfiler(true);
-  Debug.showColors(true);
+  calibSensor();
 
-  SPIFFS.begin(true);
-  ESPDash.init(server);
+  if (useSimulation) {
+    for (byte i = 0; i < 50; i++) {
+      theta[i] = outputStart;
+    }
+    modelTime = 0;
+  }
+  // Setup the pid
+  myPID.SetMode(AUTOMATIC);
 
-  ESPDash.addSliderCard("velmotpidmax", "Vel PID", 2);
-  ESPDash.addSliderCard("velmot", "Vel", 2);
-  ESPDash.addSliderCard("Kp", "Kp", 2);
-  ESPDash.addSliderCard("Kd", "Kd", 2);
-
-  ESPDash.attachSliderChanged(sliderAlterado);
-
-  Driver::Config cfg;
-  cfg.pin_cs = GPIO_NUM_22;
-  cfg.pin_miso = GPIO_NUM_19;
-  cfg.pin_mosi = GPIO_NUM_23;
-  cfg.pin_sck = GPIO_NUM_18;
-  cfg.spi_dev = VSPI_HOST;
-
-  ESP_ERROR_CHECK(ls.install(cfg));
-
-  dirPID.atSetPoint(0);
-  dirPID.setTimeStep(1);
-  server.begin();
-}
-
-void loop() {
-  Debug.handle();
-  ESPDash.loop();
-  dirPID.run();
-
-  carVal.erroLido = ls.readLine(true);
-
-  if (carVal.erroLido >= -1 && carVal.erroLido <= 1)
-    dirPIDVal.input = (carVal.erroLido * 3500);
-
-  carVal.rightMotorSpeed = carVal.rightBaseSpeed + dirPIDVal.output;
-  carVal.leftMotorSpeed = carVal.leftBaseSpeed - dirPIDVal.output;
-
-  MotorControl.motorForward(0, constrain(carVal.leftMotorSpeed, 0, 100));
-  MotorControl.motorForward(1, constrain(carVal.rightMotorSpeed, 0, 100));
-
-  if ((lastTime + 1000) < millis()) {
-    debugA("Leitura sensor: %f\n", carVal.erroLido);
-    debugA("PIDin: %.f | PIDout: %.f\n", dirPIDVal.input, dirPIDVal.output);
-    debugA("%d | %d | %d | %d | %d | %d | %d | %d\n", ls.readChannel(0),
-           ls.readChannel(1), ls.readChannel(2), ls.readChannel(3),
-           ls.readChannel(4), ls.readChannel(5), ls.readChannel(6),
-           ls.readChannel(7));
-    debugA("Motor esquerda: %d | Motor direita: %d\n", carVal.leftMotorSpeed,
-           carVal.rightMotorSpeed);
-
-    lastTime = millis();
+  if (tuning) {
+    tuning = false;
+    changeAutoTune();
+    tuning = true;
   }
 }
+
+#pragma endregion
+
+#pragma region *Loop
+
+void loop() {
+  
+  Dabble.processInput();
+  PIDMaster();
+  MotorControlFunc();
+
+  // Chama comandos do Terminal caso necessário
+  if (millis() > serialTime) {
+    SerialReceive();
+    SerialSend();
+    serialTime += 500;
+  }
+}
+
+#pragma endregion Loop

@@ -24,5 +24,6 @@
         "random": "cpp",
         "initializer_list": "cpp",
         "regex": "cpp"
-    }
+    },
+    "C_Cpp.dimInactiveRegions": false
 }
