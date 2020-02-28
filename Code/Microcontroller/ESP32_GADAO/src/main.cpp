@@ -1,204 +1,379 @@
-#define WIFI_MODE_CONNECT
+#pragma region *Defines
 
+#pragma endregion Defines
+
+#pragma region *Includes
+
+#include <Adafruit_MCP3008.h>
 #include <Arduino.h>
-#include <Hash.h>
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
-#include <ESPDash.h>
-#include <WiFi.h>
-#include <AsyncOTA.h>
+#include <DabbleESP32.h>
+#include <ESP32Encoder.h>
+#include <ESP32MotorControl.h>
+#include <PID_AutoTune_v0.h>
+#include <PID_v1.h>
 #include <QTRSensors.h>
+#include <Ticker.h>
+#include <io.h>
 
-#define NUM_SENSORS 6            // number of sensors used
-#define NUM_SAMPLES_PER_SENSOR 4 // average 4 analog samples per sensor reading
-#define EMITTER_PIN 4            // emitter is controlled by digital pin 2
+#pragma endregion
 
-// sensors 0 through 5 are connected to analog inputs 0 through 5, respectively
-QTRSensorsAnalog qtra((unsigned char[]){36, 39, 34, 35, 32, 33},
-                      NUM_SENSORS, NUM_SAMPLES_PER_SENSOR, EMITTER_PIN);
-unsigned int sensorValues[NUM_SENSORS];
+#pragma region *Variables
 
-AsyncWebServer server(80);
+String terminalBLE = "";
 
-#if defined WIFI_MODE_SERVE
-const char *ssid = "TT-Gadao";
-const char *password = "guerreiro";
-#elif defined WIFI_MODE_CONNECT
-const char *ssid = "RFREITAS";
-const char *password = "941138872";
-#endif
+byte ATuneModeRemember = 2;
 
-int count = 0;
+double kpmodel = 1.5, taup = 100, theta[50];
+double outputStart = 5;
+double aTuneStep = 50, aTuneNoise = 1, aTuneStartValue = 100;
+unsigned int aTuneLookBack = 20;
 
-// use first channel of 16 channels (started from zero)
-#define LEDC_CHANNEL_0 0
+boolean tuning = false;
+unsigned long modelTime, serialTime;
 
-// use 13 bit precission for LEDC timer
-#define LEDC_TIMER_13_BIT 13
+// set to false to connect to the real world
+boolean useSimulation = false;
 
-// use 5000 Hz as a LEDC base frequency
-#define LEDC_BASE_FREQ 5000
+struct valuesPID {
+  double input = 0;
+  double setpoint = 180;
+  double output = 0;
+  double outputMin = -47;
+  double outputMax = +47;
+  double Kp = 0.08;
+  double Ki = 0.00;
+  double Kd = 0.00;
+};
 
-// fade LED PIN (replace with LED_BUILTIN constant for built-in LED)
-#define LED_PIN 2
+struct valuesCar {
+  int erroLido = 0;
+  int rightBaseSpeed = 74;
+  int leftBaseSpeed = 74;
+  int rightMotorSpeed = 0;
+  int leftMotorSpeed = 0;
+  int gainKp = 0;
+  int gainKd = 0;
+  bool running = false;
+};
 
-int brightness = 0; // how bright the LED i
+struct valuesLineSensor {
+  uint16_t channel[8];
+  float line;
+};
 
-int indicator = 2;
+#pragma endregion
 
-bool LED = LOW;
+#pragma region *Instances
 
-void ledcAnalogWrite(uint8_t channel, uint32_t value, uint32_t valueMax = 100)
-{
-  // calculate duty, 8191 from 2 ^ 13 - 1
-  uint32_t duty = (8191 / valueMax) * min(value, valueMax);
+valuesPID dirPIDVal;
 
-  // write duty to LEDC
-  ledcWrite(channel, duty);
+valuesCar carVal;
+
+valuesLineSensor lsVal;
+
+PID myPID(&(dirPIDVal.input), &(dirPIDVal.output), &(dirPIDVal.setpoint),
+          dirPIDVal.Kp, dirPIDVal.Ki, dirPIDVal.Kd, DIRECT);
+
+PID_ATune aTune(&(dirPIDVal.input), &(dirPIDVal.output));
+
+// Instancia do controlador dos motores
+ESP32MotorControl MotorControl = ESP32MotorControl();
+
+// Instancia dos encodes
+ESP32Encoder enc_esq;
+ESP32Encoder enc_dir;
+
+// Instância do array
+Adafruit_MCP3008 adc;
+QTRSensors qtr;
+
+#pragma endregion
+
+#pragma region *Functions
+
+#pragma region **Calibrar Sensor Array
+void calibSensor() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  for (uint16_t i = 0; i < 400; i++) {
+    qtr.calibrate();
+    delay(10);
+  }
+  digitalWrite(LED_BUILTIN, LOW);
 }
+#pragma endregion
 
-void buttonClicked(const char *id)
-{
-  LED = !LED;
-  digitalWrite(indicator, LED);
+#pragma region **Funções do Tuning do PID
+
+#pragma region ***AutoTuneHelper()
+void AutoTuneHelper(boolean start) {
+  if (start)
+    ATuneModeRemember = myPID.GetMode();
+  else
+    myPID.SetMode(ATuneModeRemember);
 }
+#pragma endregion
 
-void sliderAlterado(const char *id, const int sliderValue)
-{
-  ledcAnalogWrite(LEDC_CHANNEL_0, sliderValue);
+#pragma region ***changeAutoTune()
+void changeAutoTune() {
+  if (!tuning) {
+    // Set the output to the desired starting frequency.
+    dirPIDVal.output = aTuneStartValue;
+    aTune.SetNoiseBand(aTuneNoise);
+    aTune.SetOutputStep(aTuneStep);
+    aTune.SetLookbackSec((int)aTuneLookBack);
+    AutoTuneHelper(true);
+    tuning = true;
+  } else { // cancel autotune
+    aTune.Cancel();
+    tuning = false;
+    AutoTuneHelper(false);
+  }
 }
+#pragma endregion
 
-void IRAM_ATTR isr()
-{
-  count++;
+#pragma region ***DoModel()
+void DoModel() {
+  // cycle the dead time
+  for (byte i = 0; i < 49; i++) {
+    theta[i] = theta[i + 1];
+  }
+  // compute the input
+  dirPIDVal.input = (kpmodel / taup) * (theta[0] - outputStart) +
+                    dirPIDVal.input * (1 - 1 / taup) +
+                    ((float)random(-10, 10)) / 100;
 }
+#pragma endregion
 
-void setup()
-{
+#pragma region ***PIDmaster()
+void PIDMaster() {
+  unsigned long now = millis();
 
-  // Setup timer and attach timer to a led pin
-  ledcSetup(LEDC_CHANNEL_0, LEDC_BASE_FREQ, LEDC_TIMER_13_BIT);
-  ledcAttachPin(LED_PIN, LEDC_CHANNEL_0);
-
-  pinMode(21, INPUT_PULLUP);
-  attachInterrupt(21, isr, FALLING);
-
-  pinMode(19, INPUT_PULLUP);
-  attachInterrupt(19, isr, FALLING);
-
-  Serial.begin(9600);
-
-#if defined WIFI_MODE_SERVE
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(ssid, password);
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.softAPIP());
-
-#elif defined WIFI_MODE_CONNECT
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  if (WiFi.waitForConnectResult() != WL_CONNECTED)
-  {
-    Serial.printf("WiFi Failed!\n");
-    return;
+  if (!useSimulation) { // pull the input in from the real world
+    dirPIDVal.input = qtr.readLineBlack(&(lsVal.channel[0]));
   }
 
-#endif
+  if (tuning) {
+    byte val = (aTune.Runtime());
+    if (val != 0) {
+      tuning = false;
+    }
+    if (!tuning) { // we're done, set the tuning parameters
+      dirPIDVal.Kp = aTune.GetKp();
+      dirPIDVal.Ki = aTune.GetKi();
+      dirPIDVal.Kd = aTune.GetKd();
+      myPID.SetTunings(dirPIDVal.Kp, dirPIDVal.Ki, dirPIDVal.Kd);
+      AutoTuneHelper(false);
+    }
+  } else
+    myPID.Compute();
 
-  ESPDash.init(server);
-
-  //ESPDash.addButtonCard("btn1", "Botão LED");
-  //ESPDash.attachButtonClick(buttonClicked);
-
-  ESPDash.addSliderCard("slider1", "Slider PWM", 2);
-
-  ESPDash.attachSliderChanged(sliderAlterado);
-
-  //ESPDash.addNumberCard("num1", "Encoder 1", 0);
-
-  //OTA
-  AsyncOTA.begin(&server); // Inicia o servidor de OTA
-
-  server.begin();
-
-  delay(500);
-  pinMode(23, INPUT);
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH); // turn on Arduino's LED to indicate we are in calibration mode
-  for (int i = 0; i < 2000; i++)   // make the calibration take about 10 seconds
-  {
-    qtra.calibrate(); // reads all sensors 10 times at 2.5 ms per six sensors (i.e. ~25 ms per call)
+  if (useSimulation) {
+    theta[30] = dirPIDVal.output;
+    if (now >= modelTime) {
+      modelTime += 100;
+      DoModel();
+    }
+  } else {
+    dirPIDVal.output = 0;
   }
-  digitalWrite(LED_BUILTIN, LOW); // turn off Arduino's LED to indicate we are through with calibration
-
-  // print the calibration minimum values measured when emitters were on
-
-  for (int i = 0; i < NUM_SENSORS; i++)
-  {
-    Serial.print(qtra.calibratedMinimumOn[i]);
-    Serial.print(' ');
-  }
-  Serial.println();
-
-  // print the calibration maximum values measured when emitters were on
-  for (int i = 0; i < NUM_SENSORS; i++)
-  {
-    Serial.print(qtra.calibratedMaximumOn[i]);
-    Serial.print(' ');
-  }
-  Serial.println();
-  Serial.println();
-  delay(1000);
-
-  Serial.println("Terminou o setup!");
 }
 
-void loop()
-{
+#pragma endregion
 
-  // loop do OTA
-  AsyncOTA.loop();
+#pragma endregion
 
-  /*  // read calibrated sensor values and obtain a measure of the line position from 0 to 5000
-  // To get raw sensor values, call:
-  //  qtra.read(sensorValues); instead of unsigned int position = qtra.readLine(sensorValues);
-  unsigned int position = qtra.readLine(sensorValues);
+#pragma region **Funções do Terminal
+void SerialSend() {
+  String terminalOUT = "";
 
-  // print the sensor values as numbers from 0 to 1000, where 0 means maximum reflectance and
-  // 1000 means minimum reflectance, followed by the line position
-  for (unsigned char i = 0; i < NUM_SENSORS; i++)
-  {
-    Serial.print(sensorValues[i]);
-    
-    Serial.print('\t');
+  terminalOUT += "setpoint: ";
+  terminalOUT += dirPIDVal.setpoint;
+  terminalOUT += '\n';
+  terminalOUT += "input: ";
+  terminalOUT += dirPIDVal.input;
+  terminalOUT += '\n';
+  terminalOUT += "output: ";
+  terminalOUT += dirPIDVal.output;
+  terminalOUT += "\n---\n";
+  terminalOUT += "velMot    velPID\n";
+  terminalOUT += carVal.rightBaseSpeed;
+  terminalOUT += "            ";
+  terminalOUT += dirPIDVal.outputMax;
+  terminalOUT += "\n---\n";
+  if (tuning) {
+    terminalOUT += "tuning mode";
+  } else {
+    terminalOUT += "Kp      Ki       Kd\n";
+    terminalOUT += myPID.GetKp();
+    terminalOUT += "   ";
+    terminalOUT += myPID.GetKi();
+    terminalOUT += "   ";
+    terminalOUT += myPID.GetKd();
+    terminalOUT += "   ";
   }
 
-  Serial.print(digitalRead(23));
-
-  Serial.print('\t');
-
-  //Serial.println(); // uncomment this line if you are using raw values
-  Serial.println(position); // comment this line out if you are using raw values
-
-  //delay(250);
- */
-  ESPDash.updateNumberCard("num1", count);
-  delay(250);
+  Terminal.print(terminalOUT);
 }
-/* 
-#include <Arduino.h>
-#define sensor 4
 
-int i = 0;
+void SerialReceive() {
+  if (Terminal.available() != 0) {
+    terminalBLE = "";
+    while (Terminal.available() != 0)
+      terminalBLE += Terminal.read();
+
+    switch (terminalBLE.charAt(0)) {
+    case 't':
+      if (terminalBLE.charAt(1) == 'u')
+        changeAutoTune();
+      break;
+
+    case 'k':
+      switch (terminalBLE.charAt(1)) {
+      case 'p':
+        dirPIDVal.Kp = terminalBLE.substring(2, terminalBLE.length()).toFloat();
+        myPID.SetTunings(dirPIDVal.Kp, dirPIDVal.Ki, dirPIDVal.Kd);
+        break;
+
+      case 'i':
+        dirPIDVal.Ki = terminalBLE.substring(2, terminalBLE.length()).toFloat();
+        myPID.SetTunings(dirPIDVal.Kp, dirPIDVal.Ki, dirPIDVal.Kd);
+        break;
+
+      case 'd':
+        dirPIDVal.Kd = terminalBLE.substring(2, terminalBLE.length()).toFloat();
+        myPID.SetTunings(dirPIDVal.Kp, dirPIDVal.Ki, dirPIDVal.Kd);
+        break;
+
+      default:
+        Terminal.print("Erro ao ler entrada\n");
+        break;
+      }
+
+    case 'r':
+      carVal.running = !carVal.running;
+      break;
+
+    case 'v':
+      switch (terminalBLE.charAt(1)) {
+      case 'p':
+        dirPIDVal.outputMax =
+            terminalBLE.substring(2, terminalBLE.length()).toInt();
+        dirPIDVal.outputMin = -dirPIDVal.outputMax;
+        myPID.SetOutputLimits(dirPIDVal.outputMin, dirPIDVal.outputMax);
+        break;
+
+      case 'm':
+        carVal.leftBaseSpeed = carVal.rightBaseSpeed =
+            terminalBLE.substring(2, terminalBLE.length()).toInt();
+        break;
+
+      default:
+        break;
+      }
+      break;
+
+    default:
+      Terminal.println("Entrada inválida!");
+      break;
+    }
+  }
+}
+#pragma endregion
+
+#pragma region **Motor Control Func
+void MotorControlFunc() {
+
+  carVal.rightMotorSpeed = carVal.rightBaseSpeed + dirPIDVal.output;
+  carVal.leftMotorSpeed = carVal.leftBaseSpeed - dirPIDVal.output;
+
+  if (carVal.running) {
+    MotorControl.motorForward(0, constrain(carVal.leftMotorSpeed, 0, 100));
+    MotorControl.motorForward(1, constrain(carVal.rightMotorSpeed, 0, 100));
+  } else {
+    MotorControl.motorsStop();
+  }
+}
+
+#pragma endregion
+
+#pragma endregion
+
+#pragma region *Setup
 
 void setup() {
-  pinMode(sensor, INPUT);
-  Serial.begin(9600);
+  // Define IO que controla o LED interno como saída
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  // Define IOs que controlam o driver do motor como saída
+  pinMode(MOT_DIR_F, OUTPUT);
+  pinMode(MOT_DIR_R, OUTPUT);
+  pinMode(MOT_ESQ_F, OUTPUT);
+  pinMode(MOT_ESQ_R, OUTPUT);
+
+  // Define IOs que leem os sensores laterais como entrada
+  pinMode(SL1, INPUT);
+  pinMode(SL2, INPUT);
+  pinMode(SL3, INPUT);
+  pinMode(SL4, INPUT);
+
+  // Define IOs que leem os ecnoders dos motores como entrada
+  pinMode(ENC_MOT_DIR_A, INPUT);
+  pinMode(ENC_MOT_DIR_B, INPUT);
+  pinMode(ENC_MOT_ESQ_A, INPUT);
+  pinMode(ENC_MOT_ESQ_B, INPUT);
+
+  // Habilita os resistores internos de pulldown fraco
+  ESP32Encoder::useInternalWeakPullResistors = true;
+
+  // Anexa os IOs a instancia do contador dos encoders
+  enc_dir.attachHalfQuad(ENC_MOT_DIR_A, ENC_MOT_DIR_B);
+  enc_esq.attachHalfQuad(ENC_MOT_ESQ_A, ENC_MOT_ESQ_B);
+
+  // Anexa os IOs dos motores ao controlador dos motores
+  MotorControl.attachMotors(MOT_ESQ_F, MOT_ESQ_R, MOT_DIR_F, MOT_DIR_R);
+
+  Serial.begin(115200);
+  Dabble.begin("Braia-BLE");
+
+  adc.begin(22);
+
+  qtr.setTypeAnalog();
+  qtr.setSensorPins(&adc, 8);
+
+  calibSensor();
+
+  if (useSimulation) {
+    for (byte i = 0; i < 50; i++) {
+      theta[i] = outputStart;
+    }
+    modelTime = 0;
+  }
+  // Setup the pid
+  myPID.SetMode(AUTOMATIC);
+
+  if (tuning) {
+    tuning = false;
+    changeAutoTune();
+    tuning = true;
+  }
 }
 
+#pragma endregion
+
+#pragma region *Loop
+
 void loop() {
-  i++;
-  int s1 = digitalRead(sensor);
-  Serial.printf("Leitura %d: ", i);
-  Serial.println(s1);
-} */
+  
+  Dabble.processInput();
+  PIDMaster();
+  MotorControlFunc();
+
+  // Chama comandos do Terminal caso necessário
+  if (millis() > serialTime) {
+    SerialReceive();
+    SerialSend();
+    serialTime += 500;
+  }
+}
+
+#pragma endregion Loop
