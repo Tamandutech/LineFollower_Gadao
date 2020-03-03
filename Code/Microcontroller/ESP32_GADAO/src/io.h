@@ -6,10 +6,23 @@
 #define SL4 33
 
 // Motores
-#define MOT_ESQ_F 27
-#define MOT_ESQ_R 13
-#define MOT_DIR_F 25
-#define MOT_DIR_R 26
+// #define MOT_ESQ_AI1 14
+// #define MOT_ESQ_AI2 26
+// #define MOT_ESQ_APWM 25
+
+// #define MOT_DIR_BI1 27
+// #define MOT_DIR_BI2 15
+// #define MOT_DIR_BPWM 13
+
+#define MOT_ESQ_AI1 27
+#define MOT_ESQ_AI2 15
+#define MOT_ESQ_APWM 13
+
+#define MOT_DIR_BI1 14
+#define MOT_DIR_BI2 26
+#define MOT_DIR_BPWM 25
+
+#define MOTS_STANDBY 5
 
 // Encoders Motores
 #define ENC_MOT_ESQ_A 34
